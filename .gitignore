@@ -1,0 +1,5 @@
+.*.swp
+_dumpparser.c
+_dumpparser.so
+build/
+logging.xml.gz
