@@ -2,11 +2,6 @@
 
 import sys
 import re
-# from datetime import datetime
-
-# def parse_time(timestr):
-#     return str(datetime.strptime(timestr,'%Y-%m-%dT%H:%M:%SZ'))
-
 
 cdef isChild(stack, tag):
     try:
@@ -31,10 +26,7 @@ cdef class BaseHandler:
             return handler(name,attributes)
         except AttributeError:
             if self.debug:
-                sys.stderr.write('no handler <%s>\n' % name)
-# TODO <Gio  5 Ago 2010 10:53:30 CEST> add a reference to the expat parser?
-#                 sys.stderr.write('%s:%s no handler <%s>' % (self.filename,
-#                         self.parser.CurrentLineNumber, name))
+                sys.stderr.write('no handler for <%s>\n' % name)
         finally:
             self._stack.insert(0,name)
     def endElem(self,name):
@@ -43,9 +35,7 @@ cdef class BaseHandler:
             return handler(name)
         except AttributeError:
             if self.debug:
-                sys.stderr.write('no handler <%s/>\n' % name)
-#                 sys.stderr.write('%s:%s no handler <%s/>' % (self.filename,
-#                         self.parser.CurrentLineNumber, name))
+                sys.stderr.write('no handler for <%s/>\n' % name)
         finally:
             self._stack.pop(0)
             self._data = None
@@ -91,7 +81,24 @@ cdef class PageHandler(BaseHandler):
         self.stdout.write(ns + '\n')
 
 cdef class LoggingHandler(BaseHandler):
-    pass
+    cdef log_title
+    def end_timestamp(self,name):
+        self.stdout.write(self._data + '\t')
+    def end_type(self,name):
+        self.stdout.write(self._data + '\t')
+    def end_action(self,name):
+        self.stdout.write(self._data + '\t')
+    def end_logtitle(self,name):
+        self.log_title = self._data
+        self.stdout.write(self._data + '\t')
+    def end_comment(self,name):
+        self.stdout.write(self._data + '\t')
+    def end_id(self,name):
+        self.stdout.write(self._data + '\n')
+    def end_logitem(self,name):
+        self.num_rows = self.num_rows + 1
+        ns = self.get_namespace(self.log_title)
+        self.stdout.write(ns + '\n')
 
 cdef class RevisionHandler(BaseHandler):
     cdef rev_page, rev_user, rev_user_text
@@ -121,64 +128,3 @@ cdef class RevisionHandler(BaseHandler):
         txt = self._data.replace('\t','\\t').replace('\n','\\n')
         self.stdout.write('"' + txt + '"' + '\n')
         self.num_rows += 1
-
-# 
-# class EventLogHandler(MediaWikiDumpHandler):
-#     ''' 
-#     SAX Parser for the event log dump. Format of the dump is:
-# 
-#     <mediawiki>
-#       <logitem>
-#         <id>175873</id>
-#         <timestamp>2005-05-11T15:34:52Z</timestamp>
-#         <contributor>
-#           <username>Ahoerstemeier</username>
-#           <id>7580</id>
-#         </contributor>
-#         <comment>content was: 'Will Ashbrook is a pretty good kid I know at school.'</comment>
-#         <type>delete</type>
-#         <action>delete</action>
-#         <logtitle>Will Ashbrook</logtitle>
-#         <params xml:space="preserve" />
-#       </logitem>
-#     </mediawiki> 
-# 
-#     produces output suitable for mysqldump with following columns:
-#         logitem-id timestamp type action logtitle 
-#     '''
-#     fields = [
-#         'log_id',
-#         'log_type',
-#         'log_action',
-#         'log_timestamp',
-#         'log_user',
-#         'log_namespace',
-#         'log_title',
-#         'log_comment',
-#         'log_params',
-#         'log_deleted',
-#     ]
-#     defaults = {'log_namespace' : '0'}
-#     def __init__(self,**kwargs):
-#         super(EventLogHandler,self).__init__(**kwargs)
-#     def end_timestamp(self,name):
-#         self._line['log_timestamp' ] = parse_time(self._data)
-#     def end_type(self,name):
-#         self._line['log_type'] = self._data
-#     def end_action(self,name):
-#         self._line['log_action'] = self._data
-#     def end_logtitle(self,name):
-#         self._line['log_title'] = '"%s"' % self._data
-#     def end_comment(self,name):
-#         self._line['log_comment'] = '"%s"' % self._data
-#     def end_id(self,name):
-#         if isChild(self._stack,'contributor'):
-#             self._line['log_user'] = self._data
-#         else:
-#             self._line['log_id'] = self._data
-#     def end_logitem(self,name):
-#         ''' note that this is not 100% faithful in that the logging table may
-#         contain some rows with namespace < 0. See the MW database in layout. '''
-#         self._line['log_namespace'] = self.get_namespace(self._line['log_title'])
-#         self.print_row()
-# 
