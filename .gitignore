@@ -1,4 +1,6 @@
+*.prof
 .*.swp
+*.pyc
 handlers.c
 handlers.so
 build/
