@@ -1,5 +1,5 @@
 .*.swp
-_dumpparser.c
-_dumpparser.so
+handlers.c
+handlers.so
 build/
 logging.xml.gz

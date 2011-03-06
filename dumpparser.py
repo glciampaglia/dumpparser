@@ -1,94 +1,91 @@
 #!/usr/bin/env python 
 
-''' XML sax parser for the event log dump. Produces output for mysqlimport. '''
-
-from __future__ import with_statement
-from contextlib import closing
 import sys
+from argparse import ArgumentParser, FileType
 import xml.parsers.expat as ep
-from codecs import open, getwriter 
+from codecs import getwriter 
 from gzip import GzipFile
-from locale import getpreferredencoding
-from time import time as time_now
-from _dumpparser import PageHandler,RevisionHandler,LoggingHandler
+from time import time
+from handlers import PageHandler, RevisionHandler, LoggingHandler
 
-# use this to write to stdout UTF-8 encoded strings
-def set_stdout(compress=False):
-#    enc = 'UTF-8' if sys.stdout.isatty() else getpreferredencoding()
-    stdout = GzipFile(fileobj=sys.stdout) if compress else sys.stdout
-    return getwriter('UTF-8')(stdout)
+def _utf8stdout(compress=False):
+    ''' wraps stdout with a UTF-8 capable writer '''
+    _stdout = sys.stdout
+    if compress:
+        _stdout = GzipFile(fileobj=_stdout)
+    return getwriter('UTF-8')(_stdout)
 
-_stdout = set_stdout()
-
-class XMLParser(object):
+class DumpParser(object):
     ''' base class of SAX parser '''
-    def __init__(self, handler):
+    def __init__(self, parsertype, verbose, compress):
         ''' by defaults produces output that can be piped to xmlimport. Else use
         sep and encl to customize the field separator string and the field enclosing
         characters. if debug is set to 1 information on the parsing is printed
         to stderr. '''
-        self.handler = handler
+        stdout = _utf8stdout(compress=compress)
+        if parsertype == 'logging':
+            self.handler = LoggingHandler(verbose, stdout)
+        elif parsertype == 'page':
+            self.handler = PageHandler(verbose, stdout)
+        elif parsertype == 'revision':
+            self.handler = RevisionHandler(verbose, stdout)
+        else:
+            raise ValueError('unknown parser type: %s' % parsertype)
         self.parser = ep.ParserCreate('UTF-8')
-        self.parser.StartElementHandler = handler.startElem
-        self.parser.EndElementHandler = handler.endElem
-        self.parser.CharacterDataHandler = handler.character
+        self.parser.StartElementHandler = self.handler.startElem
+        self.parser.EndElementHandler = self.handler.endElem
+        self.parser.CharacterDataHandler = self.handler.character
         self.parser.buffer_text = True
         if not self.parser.returns_unicode:
             from warnings import warn
             warn('Expat parser doesn\'t return unicode', category=UserWarning)
-    def parseFile(self,filename):
-        start_time = time_now()
-        self.filename = filename
-        try:
-            with closing(open(filename)) as f:
-                self.parser.ParseFile(f)
-        finally:
-            parsing_time = time_now() - start_time
-            parsing_speed = self.handler.num_rows / float(parsing_time)
-            parsed_rows = self.handler.num_rows
-            info = dict(time=parsing_time, speed=parsing_speed,
-                    rows=parsed_rows)
-            print >> sys.stderr
-            print >> sys.stderr,\
-                    'Time: %(time)g s, Rows: %(rows)d, Speed: %(speed)g revs/s' % info
-            if parsing_time < 1:
-                print >> sys.stderr, 'Figures may be inaccurate!'
-    def parse(self):
-        self.filename = '-'
-        self.parser.ParseFile(sys.stdin)
+    def parse(self, infile):
+        start_time = time()
+        if infile.isatty():
+            print >> sys.stderr, 'Reading from standard input. '\
+                    'Press ^D when done.'
+        self.parser.ParseFile(infile)
+        end_time = time()
+        info = { 
+                'time' : end_time - start_time,
+                'rows' : self.parser.num_rows,
+                'speed': (end_time - start_time) / float(self.parser.num_rows)
+        }
+        print >> sys.stderr, '\nTime: %(time)g s, Rows: %(rows)d, Speed: '\
+                '%(speed)g revs/s' % info
+
+def make_parser():
+    parser = ArgumentParser(description='Parse the XML dump of a Mediawiki '
+            'database')
+    parser.add_argument('table', help='Mediawiki table.', choices=[
+            'logging',
+            'page',
+            'revision',
+    ])
+    parser.add_argument('input', help='Input file.', type=FileType('r'))
+    parser.add_argument('-c', '--compress', help='Compress output with gzip.', 
+            action='store_true')
+    parser.add_argument('-v', '--verbose', help='Verbose parsing output.', 
+            action='store_true')
+    parser.add_argument('-d', '--debug', help='Raise Python exceptions to the '
+            'console', action='store_true')
+    return parser
+
 
 if __name__ == '__main__':
-    from optparse import OptionParser
-    usage = 'syntax: %prog [options] type [ file | - ]'
-    op = OptionParser(usage=usage)
-    op.add_option('-c','--compress',help='compress output', dest='compress',
-            action='store_true', default=False)
-    op.add_option('-v','--verbose',help='verbose output', dest='verbose',
-            action='store_true', default=False)
-    options,args = op.parse_args()
-    if len(args) < 1:
-        op.error('specify a parser type')
-    if options.compress:
-        _stdout = set_stdout(True)
-    t = args[0]
-    if t == 'logging':
-        handler = LoggingHandler(options.verbose, _stdout)
-    elif t == 'page':
-        handler = PageHandler(options.verbose, _stdout)
-    elif t == 'revision':
-        handler = RevisionHandler(options.verbose, _stdout)
-    else:
-        op.error('unknown parser type: %s' % t)
+    parser = make_parser()
+    ns = parser.parse_args()
     try:
-        xml_parser = XMLParser(handler)
-        if len(args) > 1:
-            xml_parser.parseFile(args[1])
+        dumpparser = DumpParser(ns.table, ns.verbose, ns.compress)
+        dumpparser.parse(ns.input)
+    except:
+        ty,val,tb = sys.exc_info()
+        if ns.debug:
+            raise ty, val, tb
         else:
-            xml_parser.parse()
-    except ep.ExpatError,e:
-        print >> sys.stderr, e.args[0]
-        sys.exit(1)
-    # XXX <Fri Apr 30 11:02:07 CEST 2010> why it is not catched?!
-    except KeyboardInterrupt:
-        sys.exit(0)
+            if ty is KeyboardInterrupt:
+                print
+                sys.exit(1)
+            name = ty.__name__
+            parser.error('%s : %s' % (name, val))
 
