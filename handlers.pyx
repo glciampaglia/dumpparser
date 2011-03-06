@@ -1,4 +1,4 @@
-''' Cython extension module '''
+''' Handler classes. '''
 
 import sys
 import re
@@ -10,12 +10,12 @@ cdef isChild(stack, tag):
         return False
 
 cdef class BaseHandler:
-    cdef public int debug
+    cdef public int verbose
     cdef readonly int num_rows
     cdef public stdout
     cdef _stack, _data, _nskeys, _nsnames, _ns
-    def __init__(self, debug=0, stdout=sys.stdout):
-        self.debug = debug
+    def __init__(self, verbose=0, stdout=sys.stdout):
+        self.verbose = verbose
         self.stdout = stdout
         self.num_rows = 0
         self._stack = []
@@ -25,7 +25,7 @@ cdef class BaseHandler:
             handler = getattr(self,'start_' + name)
             return handler(name,attributes)
         except AttributeError:
-            if self.debug:
+            if self.verbose:
                 sys.stderr.write('no handler for <%s>\n' % name)
         finally:
             self._stack.insert(0,name)
@@ -34,7 +34,7 @@ cdef class BaseHandler:
             handler = getattr(self,'end_' + name)
             return handler(name)
         except AttributeError:
-            if self.debug:
+            if self.verbose:
                 sys.stderr.write('no handler for <%s/>\n' % name)
         finally:
             self._stack.pop(0)
@@ -46,7 +46,7 @@ cdef class BaseHandler:
         self._nsnames 	= []
     def end_namespaces(self,name):
         self._ns = dict( zip(self._nsnames, self._nskeys) )
-        if self.debug:
+        if self.verbose:
             for k,v in self._ns.iteritems():
                 self.stdout.write("%s\t:%s" % (v, k))
     def start_namespace(self,name,attributes):

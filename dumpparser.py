@@ -16,12 +16,15 @@ def _utf8stdout(compress=False):
     return getwriter('UTF-8')(_stdout)
 
 class DumpParser(object):
-    ''' base class of SAX parser '''
+    ''' MediaWiki XML database dump parser '''
     def __init__(self, parsertype, verbose, compress):
-        ''' by defaults produces output that can be piped to xmlimport. Else use
-        sep and encl to customize the field separator string and the field enclosing
-        characters. if debug is set to 1 information on the parsing is printed
-        to stderr. '''
+        '''
+        Parameters
+        ----------
+        parsertype - any of {"logging", "page", "revision"}
+        verbose    - Boolean, prints additional info
+        compress   - Boolean, compresses output with gzip
+        '''
         stdout = _utf8stdout(compress=compress)
         if parsertype == 'logging':
             self.handler = LoggingHandler(verbose, stdout)
@@ -40,6 +43,13 @@ class DumpParser(object):
             from warnings import warn
             warn('Expat parser doesn\'t return unicode', category=UserWarning)
     def parse(self, infile):
+        '''
+        Parses the contents of infile
+
+        Parameters
+        ----------
+        infile - open file instance
+        '''
         start_time = time()
         if infile.isatty():
             print >> sys.stderr, 'Reading from standard input. '\
@@ -48,11 +58,11 @@ class DumpParser(object):
         end_time = time()
         info = { 
                 'time' : end_time - start_time,
-                'rows' : self.parser.num_rows,
-                'speed': (end_time - start_time) / float(self.parser.num_rows)
+                'rows' : self.handler.num_rows,
+                'speed': float(self.handler.num_rows) / (end_time - start_time)
         }
-        print >> sys.stderr, '\nTime: %(time)g s, Rows: %(rows)d, Speed: '\
-                '%(speed)g revs/s' % info
+        print >> sys.stderr, 'Time: %(time)g s, Rows: %(rows)d, Speed: '\
+                '%(speed)g rows/s' % info
 
 def make_parser():
     parser = ArgumentParser(description='Parse the XML dump of a Mediawiki '
