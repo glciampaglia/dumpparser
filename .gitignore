@@ -1,7 +1,6 @@
 *.prof
 .*.swp
 *.pyc
-handlers.c
-handlers.so
+*.c
+*.so
 build/
-logging.xml.gz
