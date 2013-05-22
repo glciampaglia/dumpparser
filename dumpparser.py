@@ -156,11 +156,11 @@ def make_parser():
 
 def main(args):
     if args.type == 'logging':
-        dumpparser = LoggingDumpParser(stdout)
+        dumpparser = LoggingDumpParser(sys.stdout)
     elif parsertype == 'page':
-        dumpparser = PageDumpParser(stdout)
+        dumpparser = PageDumpParser(sys.stdout)
     elif parsertype == 'revision':
-        dumpparser = RevisionDumpParser(stdout)
+        dumpparser = RevisionDumpParser(sys.stdout)
     else:
         raise ValueError('unknown parser type: %s' % args.type)
     dumpparser.parse(ns.input)
