@@ -50,7 +50,7 @@ class BaseDumpParser(object):
         self.sep = sep
         self.encl = encl
         self.num_rows = 0
-        self.stack = [] # XXX could use a deque
+        self.stack = [] 
         self.data = ''
         self.nskeys = []
         self.nsnames = []
@@ -78,7 +78,7 @@ class BaseDumpParser(object):
         self.attr = None
         self.stack.pop(0)
     def character(self, data):
-        self.data = data.strip()    # XXX See if writing in a buffer isn't faster
+        self.data = data.strip()
     def emit(self, newline=False):
         if wspattern.search(self.data):
             self.data = self.encl + self.data + self.encl
